@@ -26,9 +26,7 @@ services:
       - KRAKEN_API_SECRET=${KRAKEN_API_SECRET}
       - PAPER_MODE=${PAPER_MODE:-false}
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
-      - PORT=4000
-    ports:
-      - "4000:4000"
+      
     depends_on:
       postgres:
         condition: service_healthy
