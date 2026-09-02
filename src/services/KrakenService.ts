@@ -32,9 +32,16 @@ export class KrakenService {
       return { orderId: fakeId };
     }
     try {
-      const result = await this.client.addOrder(pair, side, 'limit', { price, volume });
-      const orderId = result.txid[0];
-      return { orderId, txid: result.txid };
+      // ✅ Use api() method with 'AddOrder'
+      const result = await this.client.api('AddOrder', {
+        pair: pair,
+        type: side,
+        ordertype: 'limit',
+        price: price,
+        volume: volume,
+      });
+      const orderId = result.result.txid[0];
+      return { orderId, txid: result.result.txid };
     } catch (error) {
       console.error('[KrakenService] Order placement failed:', error);
       throw error;
@@ -46,8 +53,9 @@ export class KrakenService {
       return { status: 'closed', filled: 0, price: 0, vol: 0 };
     }
     try {
-      const result = await this.client.queryOrders({ txid: orderId });
-      const order = result[orderId];
+      // ✅ Use api() with 'QueryOrders'
+      const result = await this.client.api('QueryOrders', { txid: orderId });
+      const order = result.result[orderId];
       if (!order) throw new Error(`Order ${orderId} not found`);
       return {
         status: order.status,
@@ -67,7 +75,8 @@ export class KrakenService {
       return;
     }
     try {
-      await this.client.cancelOrder(orderId);
+      // ✅ Use api() with 'CancelOrder'
+      await this.client.api('CancelOrder', { txid: orderId });
     } catch (error) {
       console.error(`[KrakenService] Failed to cancel order ${orderId}:`, error);
       throw error;
@@ -79,7 +88,7 @@ export class KrakenService {
       return { XXBT: 0.01, ZUSD: 1000 };
     }
     try {
-      // ✅ CORRECT: use .api('Balance') – not .balance()
+      // ✅ Already correct – uses api('Balance')
       const result = await this.client.api('Balance');
       const balances: Record<string, number> = {};
       for (const [key, val] of Object.entries(result.result)) {
