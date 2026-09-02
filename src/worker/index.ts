@@ -82,6 +82,48 @@ async function notifyDiscord(message: string): Promise<void> {
   await discord.sendMessage(message);
 }
 
+// ─── NEW: Update bot_status table with current momentum ──────────────
+async function updateBotStatus(botId: string, status: {
+  currentPrice: number;
+  momentum: number;
+  buyShift: number;
+  sellShift: number;
+  effectiveBuyThreshold: number;
+  effectiveSellThreshold: number;
+  buyTriggerPrice: number;
+  sellTriggerPrice: number;
+}) {
+  try {
+    await db.insert(schema.botStatus).values({
+      botId,
+      currentPrice: status.currentPrice,
+      momentum: status.momentum,
+      buyShift: status.buyShift,
+      sellShift: status.sellShift,
+      effectiveBuyThreshold: status.effectiveBuyThreshold,
+      effectiveSellThreshold: status.effectiveSellThreshold,
+      buyTriggerPrice: status.buyTriggerPrice,
+      sellTriggerPrice: status.sellTriggerPrice,
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: schema.botStatus.botId,
+      set: {
+        currentPrice: status.currentPrice,
+        momentum: status.momentum,
+        buyShift: status.buyShift,
+        sellShift: status.sellShift,
+        effectiveBuyThreshold: status.effectiveBuyThreshold,
+        effectiveSellThreshold: status.effectiveSellThreshold,
+        buyTriggerPrice: status.buyTriggerPrice,
+        sellTriggerPrice: status.sellTriggerPrice,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error(`[Worker] Failed to update bot_status for ${botId}:`, error);
+  }
+}
+
 // ─── Worker state ────────────────────────────────────────────────────
 let botInstances = new Map<string, BotInstance>();
 let pendingVolumes = new Map<string, number>();
@@ -176,6 +218,26 @@ async function startWorker() {
 
       // Signal
       const signal = instance.onPrice(price);
+
+      // ─── NEW: Save current status to bot_status ──────────────
+      try {
+        const status = instance.getStatus();
+        if (status) {
+          await updateBotStatus(botId, {
+            currentPrice: price,
+            momentum: status.momentum ?? 0,
+            buyShift: status.buyShift ?? 0,
+            sellShift: status.sellShift ?? 0,
+            effectiveBuyThreshold: status.effectiveBuyThreshold ?? 0,
+            effectiveSellThreshold: status.effectiveSellThreshold ?? 0,
+            buyTriggerPrice: status.buyTriggerPrice ?? 0,
+            sellTriggerPrice: status.sellTriggerPrice ?? 0,
+          });
+        }
+      } catch (error) {
+        console.error(`[Worker] Failed to update status for ${botId}:`, error);
+      }
+
       if (signal) {
         const internalPair = PAIR_MAP[bot.pair] || bot.pair;
         try {

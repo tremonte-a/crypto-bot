@@ -35,6 +35,15 @@ export class BotInstance {
   private pendingSide: 'buy' | 'sell' | null = null;
   private lastPrice: number | null = null;
 
+  // ─── NEW: Store last computed status values ──────────────────────
+  private _momentum: number = 0;
+  private _buyShift: number = 0;
+  private _sellShift: number = 0;
+  private _effectiveBuyThreshold: number = 0;
+  private _effectiveSellThreshold: number = 0;
+  private _buyTriggerPrice: number = 0;
+  private _sellTriggerPrice: number = 0;
+
   constructor(config: BotConfig) {
     this.config = config;
     this.referencePrice = config.referencePrice ?? null;
@@ -79,6 +88,15 @@ export class BotInstance {
 
     const buyTriggerPrice = this.referencePrice * (1 - effectiveBuyThreshold / 100);
     const sellTriggerPrice = this.referencePrice * (1 + effectiveSellThreshold / 100);
+
+    // ─── Store status values for later retrieval ──────────────────
+    this._momentum = momentum;
+    this._buyShift = cappedBuyShift;
+    this._sellShift = cappedSellShift;
+    this._effectiveBuyThreshold = effectiveBuyThreshold;
+    this._effectiveSellThreshold = effectiveSellThreshold;
+    this._buyTriggerPrice = buyTriggerPrice;
+    this._sellTriggerPrice = sellTriggerPrice;
 
     const pctFromRef = ((price - this.referencePrice) / this.referencePrice) * 100;
 
@@ -135,4 +153,17 @@ export class BotInstance {
   getReferencePrice(): number | null { return this.referencePrice; }
   getPair(): string { return this.config.pair; }
   getConfig(): BotConfig { return this.config; }
+
+  // ─── NEW: Get current status (for DB storage) ──────────────────
+  getStatus() {
+    return {
+      momentum: this._momentum,
+      buyShift: this._buyShift,
+      sellShift: this._sellShift,
+      effectiveBuyThreshold: this._effectiveBuyThreshold,
+      effectiveSellThreshold: this._effectiveSellThreshold,
+      buyTriggerPrice: this._buyTriggerPrice,
+      sellTriggerPrice: this._sellTriggerPrice,
+    };
+  }
 }
