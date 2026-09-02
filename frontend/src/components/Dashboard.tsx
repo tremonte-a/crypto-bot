@@ -8,6 +8,7 @@ import ConfigEditor from './ConfigEditor';
 import StrategyAdvisor from './StrategyAdvisor';
 import BotConfigDisplay from './BotConfigDisplay';
 import CreateBotModal from './CreateBotModal';
+import LoginModal from './LoginModal';
 
 interface Bot {
   id: string;
@@ -25,11 +26,31 @@ interface Bot {
   maxDynamicShiftPct: number;
 }
 
+interface StatusData {
+  currentPrice: number;
+  momentum: number;
+  buyShift: number;
+  sellShift: number;
+  effectiveBuyThreshold: number;
+  effectiveSellThreshold: number;
+  buyTriggerPrice: number;
+  sellTriggerPrice: number;
+}
+
+interface StatsData {
+  totalTrades: number;
+  buys: number;
+  sells: number;
+  winningSells: number;
+  winRate: number;
+  totalPnl: number;
+  totalVolume: number;
+}
+
 // ─── Helper: filter balances for a specific pair ────────────────
 function filterBalancesForPair(balances: any, pair: string): any {
   if (!balances || typeof balances !== 'object') return {};
   const [base, quote] = pair.split('/');
-  // Map fiat quotes to Kraken internal asset codes
   const quoteMap: Record<string, string> = {
     'USD': 'ZUSD',
     'EUR': 'ZEUR',
@@ -55,11 +76,20 @@ const Dashboard: React.FC = () => {
   const [showAdvisor, setShowAdvisor] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const { latestPrice, priceHistory } = useSocket(selectedBotId);
 
+  // ─── Auth state ──────────────────────────────────────────────────
+  const [token, setToken] = useState<string | null>(localStorage.getItem('adminToken'));
+  const [showLogin, setShowLogin] = useState(!token);
+  const isAdmin = !!token;
+
+  // ─── Status & Stats state ──────────────────────────────────────
+  const [status, setStatus] = useState<StatusData | null>(null);
+  const [stats, setStats] = useState<StatsData | null>(null);
+
+  const { latestPrice, priceHistory } = useSocket(selectedBotId);
   const selectedBot = bots.find(b => b.id === selectedBotId);
 
-  // ─── Filtered balances for the selected bot ──────────────────────
+  // ─── Filtered balances ──────────────────────────────────────────
   const filteredBalances = selectedBot && balances
     ? filterBalancesForPair(balances, selectedBot.pair)
     : {};
@@ -84,9 +114,7 @@ const Dashboard: React.FC = () => {
   const fetchBots = async () => {
     try {
       const res = await api.getBots();
-      console.log('[Dashboard] API response for bots:', res.data);
       const mapped = res.data.map(mapBot);
-      console.log('[Dashboard] Mapped bots:', mapped);
       setBots(mapped);
       if (mapped.length > 0 && !selectedBotId) {
         setSelectedBotId(mapped[0].id);
@@ -117,7 +145,6 @@ const Dashboard: React.FC = () => {
   const fetchBalances = async (botId: string) => {
     try {
       const res = await api.getBalanceSnapshots(botId);
-      console.log('[Dashboard] Balance API response:', res.data);
       if (res.data && res.data.length > 0) {
         const snap = res.data[0];
         let balancesData = snap.balances;
@@ -125,18 +152,15 @@ const Dashboard: React.FC = () => {
           try {
             balancesData = JSON.parse(balancesData);
           } catch (e) {
-            console.error('[Dashboard] Failed to parse balances string:', balancesData);
             balancesData = null;
           }
         }
         if (balancesData && typeof balancesData === 'object' && !Array.isArray(balancesData)) {
           setBalances(balancesData);
         } else {
-          console.warn('[Dashboard] Invalid balances data type:', balancesData);
           setBalances(null);
         }
       } else {
-        console.log('[Dashboard] No balance snapshots found.');
         setBalances(null);
       }
     } catch (err) {
@@ -145,7 +169,47 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // ─── NEW: fetch status and stats ──────────────────────────────
+  const fetchStatus = async (botId: string) => {
+    try {
+      const res = await api.getStatus(botId);
+      setStatus(res.data);
+    } catch (err) {
+      console.error('[Dashboard] Failed to fetch status:', err);
+      setStatus(null);
+    }
+  };
+
+  const fetchStats = async (botId: string) => {
+    try {
+      const res = await api.getStats(botId);
+      setStats(res.data);
+    } catch (err) {
+      console.error('[Dashboard] Failed to fetch stats:', err);
+      setStats(null);
+    }
+  };
+
+  // ─── Auth handlers ──────────────────────────────────────────────
+  const handleLogin = (newToken: string) => {
+    localStorage.setItem('adminToken', newToken);
+    api.setAuthToken(newToken);
+    setToken(newToken);
+    setShowLogin(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    api.setAuthToken(null);
+    setToken(null);
+    setShowLogin(true);
+  };
+
+  // ─── Effects ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (token) {
+      api.setAuthToken(token);
+    }
     fetchBots();
   }, []);
 
@@ -154,26 +218,22 @@ const Dashboard: React.FC = () => {
       fetchTrades(selectedBotId);
       fetchPriceSnapshots(selectedBotId);
       fetchBalances(selectedBotId);
+      fetchStatus(selectedBotId);
+      fetchStats(selectedBotId);
     }
   }, [selectedBotId]);
 
-  // ─── Poll for reference price until set ──────────────────────
+  // Poll for reference price
   useEffect(() => {
     if (!selectedBot) return;
-    if (selectedBot.referencePrice !== null) {
-      console.log('[Dashboard] Reference price already set:', selectedBot.referencePrice);
-      return;
-    }
-    console.log('[Dashboard] Reference price null – starting polling...');
+    if (selectedBot.referencePrice !== null) return;
     let count = 0;
     const maxAttempts = 20;
     const interval = setInterval(() => {
       count++;
-      console.log(`[Dashboard] Poll attempt ${count} for reference price...`);
       fetchBots();
       if (count >= maxAttempts) {
         clearInterval(interval);
-        console.log('[Dashboard] Stopping polling after max attempts.');
       }
     }, 3000);
     return () => clearInterval(interval);
@@ -212,6 +272,11 @@ const Dashboard: React.FC = () => {
             }}
           />
         )}
+        <LoginModal
+          isOpen={showLogin}
+          onLogin={handleLogin}
+          onClose={() => setShowLogin(false)}
+        />
       </div>
     );
   }
@@ -220,8 +285,34 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">🤖 Crypto Trading Bot Dashboard</h1>
+      {/* Header with admin badge and login/logout */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">🤖 Crypto Trading Bot Dashboard</h1>
+        <div className="flex items-center gap-4">
+          {isAdmin ? (
+            <span className="text-sm text-green-600 font-medium">● Admin</span>
+          ) : (
+            <span className="text-sm text-gray-500">👁️ View‑only</span>
+          )}
+          {isAdmin ? (
+            <button
+              onClick={handleLogout}
+              className="text-sm bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+            >
+              Logout
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowLogin(true)}
+              className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+            >
+              Login
+            </button>
+          )}
+        </div>
+      </div>
 
+      {/* Bot selector buttons */}
       <div className="mb-4 flex gap-2 flex-wrap items-center">
         {bots.map(bot => (
           <button
@@ -232,34 +323,42 @@ const Dashboard: React.FC = () => {
             {bot.pair}
           </button>
         ))}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
-          + New Bot
-        </button>
+        {/* New Bot button – only for admins */}
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            + New Bot
+          </button>
+        )}
         <button
           onClick={() => setShowAdvisor(true)}
           className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
         >
           📊 Strategy Advisor
         </button>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-        >
-          {showConfig ? 'Hide Config' : 'Show Config'}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            {showConfig ? 'Hide Config' : 'Show Config'}
+          </button>
+        )}
       </div>
 
-      {showConfig && (
+      {/* Config display – only for admins */}
+      {isAdmin && showConfig && (
         <div className="mb-6 bg-white rounded-lg shadow p-4">
           <h2 className="text-xl font-semibold mb-2">⚙️ Current Configuration</h2>
           <BotConfigDisplay bot={selectedBot} />
         </div>
       )}
 
+      {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* LEFT COLUMN – Chart + Controls */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-lg shadow p-4">
             <PriceChart
@@ -270,16 +369,17 @@ const Dashboard: React.FC = () => {
               sellThresholdPct={selectedBot.sellThresholdPct}
             />
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <BotControls bot={selectedBot} onUpdate={handleUpdateBot} />
-          </div>
+          {/* BotControls – only for admins */}
+          {isAdmin && (
+            <div className="bg-white rounded-lg shadow p-4">
+              <BotControls bot={selectedBot} onUpdate={handleUpdateBot} />
+            </div>
+          )}
         </div>
 
+        {/* RIGHT COLUMN – reordered: Balances → Config (if admin) → Status → Stats */}
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-semibold mb-3">⚙️ Configuration</h2>
-            <ConfigEditor bot={selectedBot} onUpdate={handleUpdateBot} />
-          </div>
+          {/* 1. Balances (always visible) */}
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-xl font-semibold mb-3">💰 Balances</h2>
             {filteredBalances && typeof filteredBalances === 'object' && Object.keys(filteredBalances).length > 0 ? (
@@ -295,14 +395,72 @@ const Dashboard: React.FC = () => {
               <p className="text-gray-500">No balance data yet.</p>
             )}
           </div>
+
+          {/* 2. Config Editor (only for admins) */}
+          {isAdmin && (
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-xl font-semibold mb-3">⚙️ Configuration</h2>
+              <ConfigEditor bot={selectedBot} onUpdate={handleUpdateBot} />
+            </div>
+          )}
+
+          {/* 3. Live Momentum (always visible) */}
+          {status && (
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-xl font-semibold mb-3">📊 Live Momentum</h2>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-gray-600">Price:</div>
+                <div className="font-mono">{status.currentPrice?.toFixed(4)}</div>
+                <div className="text-gray-600">Momentum:</div>
+                <div className="font-mono">{status.momentum?.toFixed(4)}%</div>
+                <div className="text-gray-600">Buy Shift:</div>
+                <div className="font-mono">{status.buyShift?.toFixed(4)}</div>
+                <div className="text-gray-600">Sell Shift:</div>
+                <div className="font-mono">{status.sellShift?.toFixed(4)}</div>
+                <div className="text-gray-600">Eff. Buy Thresh.:</div>
+                <div className="font-mono">{status.effectiveBuyThreshold?.toFixed(4)}%</div>
+                <div className="text-gray-600">Eff. Sell Thresh.:</div>
+                <div className="font-mono">{status.effectiveSellThreshold?.toFixed(4)}%</div>
+                <div className="text-gray-600">Buy Trigger:</div>
+                <div className="font-mono">{status.buyTriggerPrice?.toFixed(4)}</div>
+                <div className="text-gray-600">Sell Trigger:</div>
+                <div className="font-mono">{status.sellTriggerPrice?.toFixed(4)}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Performance Stats (always visible) */}
+          {stats && (
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="text-xl font-semibold mb-3">📈 Performance</h2>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-gray-600">Total Trades:</div>
+                <div className="font-mono">{stats.totalTrades}</div>
+                <div className="text-gray-600">Buys / Sells:</div>
+                <div className="font-mono">{stats.buys} / {stats.sells}</div>
+                <div className="text-gray-600">Winning Sells:</div>
+                <div className="font-mono">{stats.winningSells}</div>
+                <div className="text-gray-600">Win Rate:</div>
+                <div className="font-mono">{stats.winRate?.toFixed(2)}%</div>
+                <div className="text-gray-600">Total PnL:</div>
+                <div className={`font-mono ${stats.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {stats.totalPnl?.toFixed(2)}
+                </div>
+                <div className="text-gray-600">Volume:</div>
+                <div className="font-mono">{stats.totalVolume?.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Trade History */}
       <div className="mt-6 bg-white rounded-lg shadow p-4">
         <h2 className="text-xl font-semibold mb-3">📊 Trade History</h2>
         <TradeTable trades={trades} />
       </div>
 
+      {/* Modals */}
       {showAdvisor && selectedBot && (
         <StrategyAdvisor botId={selectedBot.id} onClose={() => setShowAdvisor(false)} />
       )}
@@ -316,6 +474,12 @@ const Dashboard: React.FC = () => {
           }}
         />
       )}
+
+      <LoginModal
+        isOpen={showLogin}
+        onLogin={handleLogin}
+        onClose={() => setShowLogin(false)}
+      />
     </div>
   );
 };
