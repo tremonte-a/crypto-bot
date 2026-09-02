@@ -76,3 +76,19 @@ export const balanceSnapshots = pgTable('balance_snapshots', {
   balances: jsonb('balances').notNull(), // e.g., { "XXBT": 0.01, "ZUSD": 1000 }
   timestamp: timestamp('timestamp').defaultNow(),
 });
+
+// ─── Bot Status (real-time momentum & triggers) ──────────────────────
+export const botStatus = pgTable('bot_status', {
+  botId: uuid('bot_id')
+    .primaryKey()
+    .references(() => bots.id, { onDelete: 'cascade' }),
+  currentPrice: real('current_price'),
+  momentum: real('momentum'),
+  buyShift: real('buy_shift'),
+  sellShift: real('sell_shift'),
+  effectiveBuyThreshold: real('effective_buy_threshold'),
+  effectiveSellThreshold: real('effective_sell_threshold'),
+  buyTriggerPrice: real('buy_trigger_price'),
+  sellTriggerPrice: real('sell_trigger_price'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
