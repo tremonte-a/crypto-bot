@@ -1,0 +1,557 @@
+{
+  "id": "73574985-d7fd-487a-9760-289bef5294bb",
+  "prevId": "ddffee7d-5448-4c6d-a80b-cf9e1f95a9d3",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.balance_snapshots": {
+      "name": "balance_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balances": {
+          "name": "balances",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "balance_snapshots_bot_id_bots_id_fk": {
+          "name": "balance_snapshots_bot_id_bots_id_fk",
+          "tableFrom": "balance_snapshots",
+          "tableTo": "bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bot_status": {
+      "name": "bot_status",
+      "schema": "",
+      "columns": {
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "current_price": {
+          "name": "current_price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "momentum": {
+          "name": "momentum",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "buy_shift": {
+          "name": "buy_shift",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sell_shift": {
+          "name": "sell_shift",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_buy_threshold": {
+          "name": "effective_buy_threshold",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_sell_threshold": {
+          "name": "effective_sell_threshold",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "buy_trigger_price": {
+          "name": "buy_trigger_price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sell_trigger_price": {
+          "name": "sell_trigger_price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "bot_status_bot_id_bots_id_fk": {
+          "name": "bot_status_bot_id_bots_id_fk",
+          "tableFrom": "bot_status",
+          "tableTo": "bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bots": {
+      "name": "bots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "pair": {
+          "name": "pair",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipe": {
+          "name": "recipe",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buy_threshold_pct": {
+          "name": "buy_threshold_pct",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sell_threshold_pct": {
+          "name": "sell_threshold_pct",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buy_amount": {
+          "name": "buy_amount",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sell_amount": {
+          "name": "sell_amount",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_position": {
+          "name": "max_position",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_quote_reserve": {
+          "name": "min_quote_reserve",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "reference_price": {
+          "name": "reference_price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "momentum_sensitivity": {
+          "name": "momentum_sensitivity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "max_dynamic_shift_pct": {
+          "name": "max_dynamic_shift_pct",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "pending_order_id": {
+          "name": "pending_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_order_side": {
+          "name": "pending_order_side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kraken_order_id": {
+          "name": "kraken_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volume": {
+          "name": "volume",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quote_volume": {
+          "name": "quote_volume",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "filled_at": {
+          "name": "filled_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "orders_bot_id_bots_id_fk": {
+          "name": "orders_bot_id_bots_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.price_snapshots": {
+      "name": "price_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price": {
+          "name": "price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "buy_line": {
+          "name": "buy_line",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sell_line": {
+          "name": "sell_line",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "momentum": {
+          "name": "momentum",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "price_snapshots_bot_id_bots_id_fk": {
+          "name": "price_snapshots_bot_id_bots_id_fk",
+          "tableFrom": "price_snapshots",
+          "tableTo": "bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.trades": {
+      "name": "trades",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volume": {
+          "name": "volume",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quote_volume": {
+          "name": "quote_volume",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fee": {
+          "name": "fee",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "pnl": {
+          "name": "pnl",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balance_snapshot": {
+          "name": "balance_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "trades_bot_id_bots_id_fk": {
+          "name": "trades_bot_id_bots_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "trades_order_id_orders_id_fk": {
+          "name": "trades_order_id_orders_id_fk",
+          "tableFrom": "trades",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
