@@ -7,6 +7,7 @@ import { db, schema } from '../db';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import path from 'path';
+import { computeIndicators } from '../utils/indicators';
 
 const app = express();
 const server = http.createServer(app);
