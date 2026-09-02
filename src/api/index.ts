@@ -1,12 +1,12 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { db, schema } from '../db';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
-import { computeIndicators } from '../utils/indicators';
+import path from 'path';
 
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +47,7 @@ async function queryOne(table: string, column: string, value: string) {
 // ─── REST API ──────────────────────────────────────────────────────
 
 // CREATE bot
-app.post('/api/bots', async (req, res) => {
+app.post('/api/bots', async (req: Request, res: Response) => {
   try {
     const { pair, recipe, buyThresholdPct, sellThresholdPct, buyAmount, sellAmount, isActive } = req.body;
     const newBot = await db.insert(schema.bots).values({
@@ -67,13 +67,13 @@ app.post('/api/bots', async (req, res) => {
 });
 
 // LIST all bots
-app.get('/api/bots', async (req, res) => {
+app.get('/api/bots', async (req: Request, res: Response) => {
   const bots = await db.execute(sql`SELECT * FROM bots`);
   res.json(bots.rows);
 });
 
 // GET a single bot
-app.get('/api/bots/:id', async (req, res) => {
+app.get('/api/bots/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const bot = await queryOne('bots', 'id', id);
@@ -84,7 +84,7 @@ app.get('/api/bots/:id', async (req, res) => {
 });
 
 // DELETE a bot
-app.delete('/api/bots/:id', async (req, res) => {
+app.delete('/api/bots/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     await db.execute(sql`DELETE FROM bots WHERE id = ${id}`);
@@ -95,13 +95,15 @@ app.delete('/api/bots/:id', async (req, res) => {
 });
 
 // ─── PATCH (update) a bot ──────────────────────────────────────────
-app.patch('/api/bots/:id', async (req, res) => {
+app.patch('/api/bots/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const updates = req.body;
   console.log('[PATCH] Received body:', JSON.stringify(updates, null, 2));
 
   try {
+    // Use the request body directly – keys match schema properties (camelCase)
     const dbUpdates = { ...updates };
+    // Remove any keys that aren't in the schema
     const allowedKeys = [
       'pair', 'recipe', 'buyThresholdPct', 'sellThresholdPct',
       'buyAmount', 'sellAmount', 'maxPosition', 'minQuoteReserve',
@@ -117,6 +119,7 @@ app.patch('/api/bots/:id', async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // Use Drizzle's update builder
     const result = await db.update(schema.bots)
       .set(dbUpdates)
       .where(eq(schema.bots.id, id))
@@ -130,7 +133,7 @@ app.patch('/api/bots/:id', async (req, res) => {
 });
 
 // ─── Trades ─────────────────────────────────────────────────────────
-app.get('/api/trades/:botId', async (req, res) => {
+app.get('/api/trades/:botId', async (req: Request, res: Response) => {
   const { botId } = req.params;
   try {
     const result = await db.execute(
@@ -143,7 +146,7 @@ app.get('/api/trades/:botId', async (req, res) => {
 });
 
 // ─── Balance Snapshots ──────────────────────────────────────────────
-app.get('/api/balance-snapshots/:botId', async (req, res) => {
+app.get('/api/balance-snapshots/:botId', async (req: Request, res: Response) => {
   const { botId } = req.params;
   try {
     const result = await db.execute(
@@ -156,7 +159,7 @@ app.get('/api/balance-snapshots/:botId', async (req, res) => {
 });
 
 // ─── Price Snapshots (for chart) ──────────────────────────────────
-app.get('/api/price-snapshots/:botId', async (req, res) => {
+app.get('/api/price-snapshots/:botId', async (req: Request, res: Response) => {
   const { botId } = req.params;
   const limit = parseInt(req.query.limit as string) || 100;
   try {
@@ -169,18 +172,19 @@ app.get('/api/price-snapshots/:botId', async (req, res) => {
   }
 });
 
-// ─── Strategy Advisor ────────────────────────────────────────────────
-app.get('/api/advisor/:botId', async (req, res) => {
+// ─── Strategy Advisor ──────────────────────────────────────────────
+app.get('/api/advisor/:botId', async (req: Request, res: Response) => {
   const { botId } = req.params;
   try {
+    // Import computeIndicators from utils
+    const { computeIndicators } = await import('../utils/indicators');
     const result = await db.execute(
       sql`SELECT price, timestamp FROM price_snapshots WHERE bot_id = ${botId} ORDER BY timestamp ASC LIMIT 1000`
     );
-    const prices = result.rows.map((row: any) => {
-      const price = parseFloat(row.price);
-      const ts = row.timestamp instanceof Date ? row.timestamp.getTime() : new Date(row.timestamp).getTime();
-      return { price, timestamp: ts };
-    });
+    const prices = result.rows.map(row => ({
+      price: parseFloat(row.price),
+      timestamp: new Date(row.timestamp).getTime(),
+    }));
     if (prices.length < 20) {
       return res.status(400).json({ error: 'Not enough price data for analysis (need at least 20 snapshots).' });
     }
@@ -191,6 +195,7 @@ app.get('/api/advisor/:botId', async (req, res) => {
     res.status(400).json({ error: String(err) });
   }
 });
+
 // ─── Start server (only if this file is run directly) ────────────
 const PORT = process.env.PORT || 4000;
 if (require.main === module) {
