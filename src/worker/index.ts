@@ -67,7 +67,6 @@ async function storeBalanceSnapshot(botId: string): Promise<void> {
     console.log(`[Worker] Balance snapshot stored for bot ${botId}`);
   } catch (error) {
     console.error(`[Worker] Failed to store balance snapshot for bot ${botId}:`, error);
-    // Optionally store an empty snapshot to avoid null errors
     try {
       await db.insert(schema.balanceSnapshots).values({
         botId: botId,
@@ -86,6 +85,50 @@ async function notifyDiscord(message: string): Promise<void> {
 // ─── Worker state ────────────────────────────────────────────────────
 let botInstances = new Map<string, BotInstance>();
 let pendingVolumes = new Map<string, number>();
+let allActiveBots: any[] = [];
+
+// ─── Helper to load bots and update instances ───────────────────────
+async function loadBots() {
+  allActiveBots = await db.select().from(schema.bots).where(eq(schema.bots.isActive, true));
+  console.log(`[Worker] Found ${allActiveBots.length} active bots`);
+
+  // Remove instances that no longer exist
+  const currentIds = new Set(allActiveBots.map(b => b.id));
+  for (const [id, instance] of botInstances) {
+    if (!currentIds.has(id)) {
+      botInstances.delete(id);
+      console.log(`[Worker] Removed bot ${instance.getPair()}`);
+    }
+  }
+
+  // Add or update bots
+  for (const bot of allActiveBots) {
+    const existing = botInstances.get(bot.id);
+    if (existing) continue;
+    const config: BotConfig = {
+      id: bot.id,
+      pair: bot.pair,
+      recipe: bot.recipe as any,
+      buyThresholdPct: bot.buyThresholdPct ?? 0,
+      sellThresholdPct: bot.sellThresholdPct ?? 0,
+      buyAmount: bot.buyAmount ?? 0,
+      sellAmount: bot.sellAmount ?? 0,
+      maxPosition: bot.maxPosition ?? undefined,
+      minQuoteReserve: bot.minQuoteReserve ?? undefined,
+      isActive: bot.isActive ?? false,
+      referencePrice: bot.referencePrice ?? null,
+      momentumSensitivity: bot.momentumSensitivity ?? 0.5,
+      maxDynamicShiftPct: bot.maxDynamicShiftPct ?? 5.0,
+    };
+    const instance = new BotInstance(config);
+    if (bot.pendingOrderId && bot.pendingOrderSide) {
+      instance.setPendingOrder(bot.pendingOrderId, bot.pendingOrderSide as 'buy' | 'sell');
+      console.log(`[Worker] Restored pending order ${bot.pendingOrderId} for ${bot.pair}`);
+    }
+    botInstances.set(bot.id, instance);
+    console.log(`[Worker] Bot ${bot.pair} initialized, refPrice: ${instance.getReferencePrice()}`);
+  }
+}
 
 // ─── Main worker loop ──────────────────────────────────────────────
 async function startWorker() {
@@ -95,18 +138,17 @@ async function startWorker() {
   await loadBots();
 
   // ─── Store initial balance snapshot for each bot ──────────────
-  for (const bot of activeBots) {
+  for (const bot of allActiveBots) {
     await storeBalanceSnapshot(bot.id);
   }
   console.log('[Worker] Initial balance snapshots stored.');
 
   // Price polling (every 5s)
   setInterval(async () => {
-    // Reload bots periodically in case of changes
     await loadBots();
 
     for (const [botId, instance] of botInstances) {
-      const bot = (await db.select().from(schema.bots).where(eq(schema.bots.id, botId)))[0];
+      const bot = allActiveBots.find(b => b.id === botId);
       if (!bot) continue;
 
       const price = await fetchPrice(bot.pair);
@@ -275,52 +317,6 @@ async function startWorker() {
     console.log('[Worker] Received SIGTERM – shutting down gracefully...');
     process.exit(0);
   });
-}
-
-// ─── Helper to load bots and update instances ───────────────────────
-async function loadBots() {
-  const activeBots = await db.select().from(schema.bots).where(eq(schema.bots.isActive, true));
-  console.log(`[Worker] Found ${activeBots.length} active bots`);
-
-  // Remove instances that no longer exist
-  const currentIds = new Set(activeBots.map(b => b.id));
-  for (const [id, instance] of botInstances) {
-    if (!currentIds.has(id)) {
-      botInstances.delete(id);
-      console.log(`[Worker] Removed bot ${instance.getPair()}`);
-    }
-  }
-
-  // Add or update bots
-  for (const bot of activeBots) {
-    const existing = botInstances.get(bot.id);
-    if (existing) {
-      // Optionally update config if changed (we skip for simplicity)
-      continue;
-    }
-    const config: BotConfig = {
-      id: bot.id,
-      pair: bot.pair,
-      recipe: bot.recipe as any,
-      buyThresholdPct: bot.buyThresholdPct ?? 0,
-      sellThresholdPct: bot.sellThresholdPct ?? 0,
-      buyAmount: bot.buyAmount ?? 0,
-      sellAmount: bot.sellAmount ?? 0,
-      maxPosition: bot.maxPosition ?? undefined,
-      minQuoteReserve: bot.minQuoteReserve ?? undefined,
-      isActive: bot.isActive ?? false,
-      referencePrice: bot.referencePrice ?? null,
-      momentumSensitivity: bot.momentumSensitivity ?? 0.5,
-      maxDynamicShiftPct: bot.maxDynamicShiftPct ?? 5.0,
-    };
-    const instance = new BotInstance(config);
-    if (bot.pendingOrderId && bot.pendingOrderSide) {
-      instance.setPendingOrder(bot.pendingOrderId, bot.pendingOrderSide as 'buy' | 'sell');
-      console.log(`[Worker] Restored pending order ${bot.pendingOrderId} for ${bot.pair}`);
-    }
-    botInstances.set(bot.id, instance);
-    console.log(`[Worker] Bot ${bot.pair} initialized, refPrice: ${instance.getReferencePrice()}`);
-  }
 }
 
 // ─── Start ──────────────────────────────────────────────────────────
