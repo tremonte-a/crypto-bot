@@ -172,16 +172,14 @@ app.get('/api/price-snapshots/:botId', async (req: Request, res: Response) => {
   }
 });
 
-// ─── Strategy Advisor ──────────────────────────────────────────────
-app.get('/api/advisor/:botId', async (req: Request, res: Response) => {
+// ─── Strategy Advisor ────────────────────────────────────────────────
+app.get('/api/advisor/:botId', async (req, res) => {
   const { botId } = req.params;
   try {
-    // Import computeIndicators from utils
-    const { computeIndicators } = await import('../utils/indicators');
     const result = await db.execute(
       sql`SELECT price, timestamp FROM price_snapshots WHERE bot_id = ${botId} ORDER BY timestamp ASC LIMIT 1000`
     );
-    const prices = result.rows.map(row => ({
+    const prices = result.rows.map((row: any) => ({
       price: parseFloat(row.price),
       timestamp: new Date(row.timestamp).getTime(),
     }));
