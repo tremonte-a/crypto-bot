@@ -60,7 +60,6 @@ async function fetchPrice(pair: string, retries = 3): Promise<number | null> {
 async function storeBalanceSnapshot(botId: string): Promise<void> {
   try {
     const balances = await kraken.getBalances();
-    // If balances is empty or undefined, we still store an empty object
     await db.insert(schema.balanceSnapshots).values({
       botId: botId,
       balances: balances || {},
@@ -94,6 +93,12 @@ async function startWorker() {
 
   // Initial load
   await loadBots();
+
+  // ─── Store initial balance snapshot for each bot ──────────────
+  for (const bot of activeBots) {
+    await storeBalanceSnapshot(bot.id);
+  }
+  console.log('[Worker] Initial balance snapshots stored.');
 
   // Price polling (every 5s)
   setInterval(async () => {
