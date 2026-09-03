@@ -35,7 +35,7 @@ export class BotInstance {
   private pendingSide: 'buy' | 'sell' | null = null;
   private lastPrice: number | null = null;
 
-  // ─── NEW: Store last computed status values ──────────────────────
+  // ─── Store last computed status values ──────────────────────
   private _momentum: number = 0;
   private _buyShift: number = 0;
   private _sellShift: number = 0;
@@ -110,13 +110,19 @@ export class BotInstance {
 
     const recipe = this.config.recipe;
 
-    if ((recipe === 'crypto_accumulator' || recipe === 'combination') && price <= buyTriggerPrice) {
+    // ─── BUY signal: only if buyAmount > 0 ───────────────────────
+    if (this.config.buyAmount > 0 && 
+        (recipe === 'crypto_accumulator' || recipe === 'combination') && 
+        price <= buyTriggerPrice) {
       console.log(`[${this.config.pair}] 🔽 BUY SIGNAL! Price: ${price} (${pctFromRef.toFixed(2)}% from ref ${this.referencePrice})`);
       const volume = this.config.buyAmount / price;
       return { type: 'buy', price, volume };
     }
 
-    if ((recipe === 'cash_accumulator' || recipe === 'combination') && price >= sellTriggerPrice) {
+    // ─── SELL signal: only if sellAmount > 0 ──────────────────────
+    if (this.config.sellAmount > 0 && 
+        (recipe === 'cash_accumulator' || recipe === 'combination') && 
+        price >= sellTriggerPrice) {
       console.log(`[${this.config.pair}] 🔼 SELL SIGNAL! Price: ${price} (${pctFromRef.toFixed(2)}% from ref ${this.referencePrice})`);
       const volume = this.config.sellAmount;
       return { type: 'sell', price, volume };
@@ -154,7 +160,7 @@ export class BotInstance {
   getPair(): string { return this.config.pair; }
   getConfig(): BotConfig { return this.config; }
 
-  // ─── NEW: Get current status (for DB storage) ──────────────────
+  // ─── Get current status (for DB storage) ──────────────────
   getStatus() {
     return {
       momentum: this._momentum,
