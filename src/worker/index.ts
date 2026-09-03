@@ -82,7 +82,7 @@ async function notifyDiscord(message: string): Promise<void> {
   await discord.sendMessage(message);
 }
 
-// ─── NEW: Update bot_status table with current momentum ──────────────
+// ─── Update bot_status table with current momentum ──────────────────
 async function updateBotStatus(botId: string, status: {
   currentPrice: number;
   momentum: number;
@@ -219,7 +219,7 @@ async function startWorker() {
       // Signal
       const signal = instance.onPrice(price);
 
-      // ─── NEW: Save current status to bot_status ──────────────
+      // ─── Save current status to bot_status ──────────────────────
       try {
         const status = instance.getStatus();
         if (status) {
@@ -266,7 +266,19 @@ async function startWorker() {
 
           console.log(`[Worker] Order ${orderId} placed for ${bot.pair}`);
           await notifyDiscord(`📈 **Order Placed**\nPair: ${bot.pair}\nSide: ${signal.type.toUpperCase()}\nPrice: ${signal.price}\nVolume: ${signal.volume}\nOrder ID: ${orderId}`);
-        } catch (error) {
+          
+        } catch (error: any) {
+          const errorMsg = error.message || String(error);
+          
+          // ─── Handle minimum volume errors gracefully ──────────────
+          if (errorMsg.includes('MINIMUM_VOLUME_ERROR')) {
+            console.warn(`[Worker] ⏭️ Skipping ${signal.type} for ${bot.pair}: volume too small (${signal.volume})`);
+            await notifyDiscord(`⚠️ **Trade Skipped**\nPair: ${bot.pair}\nSide: ${signal.type.toUpperCase()}\nVolume: ${signal.volume}\nReason: Below minimum trade amount`);
+            // Don't set pending order – continue monitoring
+            continue;
+          }
+          
+          // ─── Handle other errors ──────────────────────────────────
           console.error(`[Worker] Failed to place order for ${bot.pair}:`, error);
           await notifyDiscord(`❌ **Order Failed**\nPair: ${bot.pair}\nSide: ${signal.type.toUpperCase()}\nError: ${String(error)}`);
         }
